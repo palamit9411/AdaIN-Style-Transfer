@@ -37,11 +37,10 @@ encoder = VGGEncoder('vgg_normalised.pth').to(device)
 decoder = Decoder().to(device)
 decoder.load_state_dict(
     torch.load(
-        'D:\\NST_code\\decoder_100.pth',
+        'decoder_100.pth',
         map_location=device
     )
 )
-
 encoder.eval()
 decoder.eval()
 
