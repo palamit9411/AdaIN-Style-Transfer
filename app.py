@@ -1,5 +1,6 @@
 import os
 import torch
+torch.set_grad_enabled(False)
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 from flask_wtf import FlaskForm
 from flask_bootstrap import Bootstrap
@@ -17,6 +18,7 @@ from utils.utils import adaptive_instance_normalization, calc_mean_std
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'supersecretkey'
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg'}
 Bootstrap(app)
@@ -31,14 +33,15 @@ class UploadForm(FlaskForm):
     alpha = FloatField('Alpha', default=1.0)
     submit = SubmitField('Transfer Style')
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 
 encoder = VGGEncoder('vgg_normalised.pth').to(device)
 decoder = Decoder().to(device)
 decoder.load_state_dict(
     torch.load(
         'decoder_100.pth',
-        map_location=device
+        map_location='cpu',
+        weights_only=True
     )
 )
 encoder.eval()
@@ -70,6 +73,12 @@ def style_transfer(content_image, style_image, encoder, decoder, alpha, device):
         stylized_feats = alpha * stylized_feats + (1 - alpha) * content_feats
 
         stylized_image = decoder(stylized_feats)
+
+        del content_feats
+        del style_feats
+        del stylized_feats
+
+        torch.cuda.empty_cache()
 
     return stylized_image
 
@@ -122,6 +131,7 @@ def index():
                 result_filename = 'stylized_' + content_filename
                 result_path = os.path.join(app.config['UPLOAD_FOLDER'], result_filename)
                 save_image(stylized_image, result_path)
+                del stylized_image
                 
                 result_image = result_filename
             except Exception as e:
